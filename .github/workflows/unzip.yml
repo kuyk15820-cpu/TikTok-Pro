@@ -3,7 +3,7 @@ name: Auto FFmpeg Processor
 on:
   push:
     paths:
-      - 'media/Test.MP4' # ทำงานเฉพาะตอนที่มีการอัปเดตไฟล์นี้เท่านั้น
+      - 'media/Test.MP4'
 
 jobs:
   convert:
@@ -13,33 +13,28 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # ดึงข้อมูลประวัติทั้งหมดเพื่อป้องกันปัญหาตอน Push กลับ
+        fetch-depth: 0
 
     - name: Set up Git Configuration
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-    # 🛠️ เพิ่มขั้นตอนนี้เข้าไปเพื่อติดตั้ง ffmpeg บนเครื่อง Ubuntu ของ GitHub
     - name: Install FFmpeg
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
 
-    # รันคำสั่งแปลงไฟล์ตามปกติ
     - name: Process Video with FFmpeg
       run: |
         cd media
-        
-        # 1. ลบไฟล์เก่าออกก่อน (ถ้ามี)
         rm -f Test1.MP4
-        
-        # 2. รันคำสั่ง ffmpeg สโลว์วิดีโอ
+        # ใช้คำสั่งเดิมของคุณ (-codec copy จะไม่บีบอัดภาพและคงความละเอียดเดิม 100%)
         ffmpeg -itsscale 2 -i Test.MP4 -codec copy Test1.MP4
 
-    - name: Commit and Push changes
-      run: |
-        git add media/Test1.MP4
-        
-        # ตรวจสอบว่าไฟล์มีการเปลี่ยนแปลงจริงไหม ถ้าจริงให้ Commit และ Push
-        git diff-index --quiet HEAD || (git commit -m "Auto-generated: Processed video Test1.MP4" && git push)
+    # 📥 เพิ่มขั้นตอนนี้เข้าไปเพื่ออัปโหลดไฟล์ดิบเก็บไว้บน GitHub Cloud แบบไม่มีการบีบอัด
+    - name: Upload Uncompressed Video
+      uses: actions/upload-artifact@v4
+      with:
+        name: Original-1080p-Video # ชื่อแพ็กเกจไฟล์
+        path: media/Test1.MP4       # พาธไฟล์ที่ต้องการเก็บ
