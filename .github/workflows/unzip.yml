@@ -20,14 +20,21 @@ jobs:
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+    # 🛠️ เพิ่มขั้นตอนนี้เข้าไปเพื่อติดตั้ง ffmpeg บนเครื่อง Ubuntu ของ GitHub
+    - name: Install FFmpeg
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
+    # รันคำสั่งแปลงไฟล์ตามปกติ
     - name: Process Video with FFmpeg
       run: |
         cd media
         
-        # 1. ลบไฟล์เก่าออกก่อน (ถ้ามี) เพื่อความชัวร์
+        # 1. ลบไฟล์เก่าออกก่อน (ถ้ามี)
         rm -f Test1.MP4
         
-        # 2. รันคำสั่ง ffmpeg สโลว์วิดีโอตามที่คุณต้องการ
+        # 2. รันคำสั่ง ffmpeg สโลว์วิดีโอ
         ffmpeg -itsscale 2 -i Test.MP4 -codec copy Test1.MP4
 
     - name: Commit and Push changes
