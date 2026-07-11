@@ -1,0 +1,63 @@
+name: Unzip Any Project Files
+
+on:
+  push:
+    paths:
+      - '**/*.zip'
+  workflow_dispatch:
+
+jobs:
+  unzip-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract and Flatten ZIP File
+        run: |
+          ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+            echo "พบไฟล์ ZIP: $ZIP_FILE กำลังเข้าสู่กระบวนการจัดระเบียบโครงสร้างใหม่..."
+            
+            # สร้างโฟลเดอร์ชั่วคราวสำหรับ Sandbox แตกไฟล์
+            mkdir -p _temp_extract
+            unzip -o "$ZIP_FILE" -d _temp_extract
+            rm "$ZIP_FILE"
+            
+            # เช็กว่าข้างใน Sandbox มีโฟลเดอร์ครอบอยู่เพียงแค่อันเดียวใช่ไหม
+            TARGET_DIR="_temp_extract"
+            SUB_ITEMS_COUNT=$(ls -A1 "$TARGET_DIR" | wc -l)
+            
+            if [ "$SUB_ITEMS_COUNT" -eq 1 ]; then
+              FIRST_ITEM=$(ls -A1 "$TARGET_DIR")
+              if [ -d "$TARGET_DIR/$FIRST_ITEM" ]; then
+                echo "ตรวจพบโฟลเดอร์ชั้นแรกครอบไฟล์อยู่ ($FIRST_ITEM) ทำการขยับเป้าหมายเข้าไปดึงด้านใน..."
+                TARGET_DIR="_temp_extract/$FIRST_ITEM"
+              fi
+            fi
+            
+            # กวาดไฟล์และโฟลเดอร์ย่อยทั้งหมดจากเป้าหมาย ออกมาวางที่ Root ปัจจุบันของ Repo
+            echo "กำลังผลักดันไฟล์ทั้งหมดออกมาที่ Root..."
+            find "$TARGET_DIR" -mindepth 1 -maxdepth 1 -exec mv -t ./ {} +
+            
+            # ทำลายโฟลเดอร์ Sandbox ชั่วคราวทิ้งทั้งหมด
+            rm -rf _temp_extract
+          else
+            echo "ไม่พบไฟล์ .zip ในโฟลเดอร์หลัก"
+            exit 0
+          fi
+
+      - name: Commit and Push Extracted Files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Automated unzip: Extracted and flattened source files to root"
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "No changes detected."
+          fi
