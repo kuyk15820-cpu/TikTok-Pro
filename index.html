@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>GitHub Video Uploader & Converter</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f6f8fa; }
+        .container { max-width: 500px; margin: 0 auto; border: 1px solid #d0d7de; padding: 25px; border-radius: 8px; background-color: white; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        h2 { margin-top: 0; color: #24292f; border-bottom: 1px solid #d0d7de; padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #57606a; font-size: 14px; }
+        .form-group input[type="text"], .form-group input[type="password"] { width: 100%; padding: 8px 12px; border: 1px solid #d0d7de; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        .form-group input[type="text"]:focus, .form-group input[type="password"]:focus { outline: none; border-color: #0969da; box-shadow: 0 0 0 3px rgba(9,105,218,0.3); }
+        button { background-color: #2da44e; color: white; border: 1px solid rgba(27,31,36,0.15); padding: 10px 20px; cursor: pointer; border-radius: 6px; font-weight: 600; font-size: 14px; width: 100%; transition: 0.2s; }
+        button:hover { background-color: #2c974b; }
+        #status { font-weight: bold; margin-top: 15px; color: #0969da; font-size: 14px; }
+        hr { border: 0; border-top: 1px solid #d0d7de; margin: 20px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>GitHub Configuration</h2>
+    
+    <!-- ส่วนกรอกข้อมูลเพื่อเชื่อมต่อ GitHub -->
+    <div class="form-group">
+        <label for="githubUser">GitHub Username</label>
+        <input type="text" id="githubUser" placeholder="เช่น knights-of-queen02">
+    </div>
+    
+    <div class="form-group">
+        <label for="githubRepo">Repository Name</label>
+        <input type="text" id="githubRepo" placeholder="เช่น video-processor">
+    </div>
+    
+    <div class="form-group">
+        <label for="githubToken">Personal Access Token (Classic)</label>
+        <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+    </div>
+
+    <hr>
+
+    <h2>อัปโหลดวิดีโอไป GitHub เพื่อแปลงไฟล์</h2>
+    <div class="form-group">
+        <label for="videoFile">เลือกไฟล์วิดีโอ (.MP4)</label>
+        <input type="file" id="videoFile" accept="video/mp4">
+    </div>
+    
+    <button onclick="uploadToGitHub()">อัปโหลดและแปลงไฟล์ทันที</button>
+    <p id="status"></p>
+</div>
+
+<script>
+const FILE_PATH = "media/Test.MP4"; // พาธไฟล์บน Repo Fixed ไว้ตามโครงสร้างสคริปต์
+
+// ดึงข้อมูลเก่าที่เคยกรอกไว้ในเครื่องมาใส่ให้อัตโนมัติ (ถ้ามี)
+window.onload = function() {
+    if (localStorage.getItem('git_user')) document.getElementById('githubUser').value = localStorage.getItem('git_user');
+    if (localStorage.getItem('git_repo')) document.getElementById('githubRepo').value = localStorage.getItem('git_repo');
+    if (localStorage.getItem('git_token')) document.getElementById('githubToken').value = localStorage.getItem('git_token');
+};
+
+async function uploadToGitHub() {
+    // ดึงค่าจาก Inputs ณ เวลาที่กดปุ่ม
+    const OWNER = document.getElementById('githubUser').value.trim();
+    const REPO = document.getElementById('githubRepo').value.trim();
+    const TOKEN = document.getElementById('githubToken').value.trim();
+    
+    const fileInput = document.getElementById('videoFile');
+    const statusText = document.getElementById('status');
+    
+    // ตรวจสอบความพร้อมของข้อมูลพื้นฐาน
+    if (!OWNER || !REPO || !TOKEN) {
+        alert('กรุณากรอกข้อมูล GitHub Configuration ให้ครบถ้วนก่อนครับ');
+        return;
+    }
+
+    if (fileInput.files.length === 0) {
+        alert('กรุณาเลือกไฟล์วิดีโอ .MP4 ก่อนครับ');
+        return;
+    }
+
+    // เซฟค่าเก็บไว้ในเบราว์เซอร์เพื่อความสะดวกในครั้งต่อไป
+    localStorage.setItem('git_user', OWNER);
+    localStorage.setItem('git_repo', REPO);
+    localStorage.setItem('git_token', TOKEN);
+
+    const file = fileInput.files[0];
+    statusText.innerText = "กำลังเตรียมไฟล์...";
+
+    // 1. แปลงไฟล์วิดีโอเป็น Base64 (ข้อกำหนดของ GitHub API)
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async function () {
+        const base64Content = reader.result.split(',')[1];
+
+        statusText.innerText = "กำลังตรวจสอบไฟล์เก่าบน GitHub...";
+        
+        // 2. เช็กหาค่า SHA ของไฟล์เดิมบน GitHub (จำเป็นต้องใช้เพื่ออัปโหลดทับไฟล์เดิม)
+        let sha = "";
+        try {
+            const getFileRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
+                headers: { 'Authorization': `token ${TOKEN}` }
+            });
+            if (getFileRes.ok) {
+                const fileData = await getFileRes.json();
+                sha = fileData.sha; // ได้รหัส SHA ของไฟล์เก่ามาแล้ว
+            }
+        } catch (err) {
+            console.log("ยังไม่มีไฟล์นี้ในระบบ ไม่เป็นไร");
+        }
+
+        statusText.innerText = "กำลังอัปโหลดไฟล์ใหม่ขึ้นไปทับไฟล์เดิม...";
+
+        // 3. ยิง API อัปโหลดไฟล์ใหม่ขึ้นไปทับ (เขียนทับไฟล์ Test.MP4 เดิมทันที)
+        const uploadRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `token ${TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: "Upload new video via Web HTML",
+                content: base64Content,
+                sha: sha ? sha : undefined // ถ้ามีไฟล์เก่าให้ส่ง sha ไปด้วยเพื่อเขียนทับ
+            })
+        });
+
+        if (uploadRes.ok) {
+            statusText.innerText = "อัปโหลดสำเร็จ! GitHub Actions กำลังเริ่มลบไฟล์เก่าและแปลงไฟล์ใหม่ให้คุณโดยอัตโนมัติ...";
+            alert("อัปโหลดสำเร็จ! ระบบกำลังดำเนินการแปลงไฟล์บน GitHub");
+        } else {
+            statusText.innerText = "เกิดข้อผิดพลาดในการอัปโหลด (กรุณาเช็กความถูกต้องของ Token หรือชื่อ Repo ใน Console)";
+            const errData = await uploadRes.json();
+            console.error(errData);
+        }
+    };
+}
+</script>
+
+</body>
+</html>
